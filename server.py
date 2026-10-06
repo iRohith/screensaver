@@ -185,6 +185,12 @@ def _require_admin() -> Response | None:
 def _require_auth() -> Response | None:
     if "role" not in session:
         return jsonify(error="unauthorized"), 401
+    # A guest session is only valid while the OTP is still live. When the
+    # OTP expires the guest must be logged out automatically — otherwise
+    # an expired code leaves them authenticated forever.
+    if session.get("role") == "guest" and not _otp_valid(session.get("otp", "")):
+        session.clear()
+        return jsonify(error="otp expired — please log in again"), 401
     return None
 
 
@@ -311,10 +317,12 @@ def login():
         _record_login_failure()
         return jsonify(error="invalid credentials"), 401
     # guest: any username + valid, unexpired OTP
-    if 1 <= len(username) <= 32 and _otp_valid(str(data.get("otp") or "").strip()):
+    otp = str(data.get("otp") or "").strip()
+    if 1 <= len(username) <= 32 and _otp_valid(otp):
         session.clear()
         session["role"] = "guest"
         session["username"] = username
+        session["otp"] = otp  # bound to this exact code; regen/expiry logs them out
         return jsonify(role="guest")
     _record_login_failure()
     return jsonify(error="invalid username or OTP"), 401

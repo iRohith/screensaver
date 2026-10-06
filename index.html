@@ -498,6 +498,18 @@ async function otpAction(path, body) {
 
 /* ---- gallery ---- */
 async function refreshGallery() {
+  // New folders can appear between polls (admin creates one). Guests have
+  // no folder picker, so their tabs must be rebuilt from the live list.
+  if (role !== "admin") {
+    const fr = await api("/api/folders");
+    if (fr.ok) {
+      allFolders = fr.data.folders || [];
+      if (!currentFolder || !allFolders.includes(currentFolder)) {
+        currentFolder = allFolders[0] || "";
+        localStorage.setItem("sg-folder", currentFolder);
+      }
+    }
+  }
   const folder = currentFolder;
   const r = await api("/api/gallery" + (folder ? "?folder=" + encodeURIComponent(folder) : ""));
   if (!r.ok) return;
