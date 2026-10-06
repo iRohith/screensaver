@@ -49,6 +49,7 @@ OTP_MIN_HOURS, OTP_MAX_HOURS = 0.25, 24.0
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"}
 
 DATA_DIR.mkdir(exist_ok=True)
+LOG_FILE = DATA_DIR / "screensaver.log"  # all server output lands here
 
 # ---------------------------------------------------------------- state
 
@@ -65,6 +66,7 @@ _ngrok_proc = None             # subprocess.Popen of ngrok
 _capture_lock = threading.Lock()
 _shutdown = threading.Event()
 _restarting = threading.Event()
+_restart_ready = threading.Event()  # set by the child once it owns the port
 _otp = None                    # {"code": str, "expires_at": float, "hours": float}
 _state_lock = threading.Lock()
 _fail_attempts: dict[str, list[float]] = {}
@@ -643,23 +645,14 @@ def restart_server():
         # startup check passes; the child's bind-retry absorbs the port race.
         _remove_pid()
         _restarting.set()
+        _restart_ready.clear()
         _spawn_detached()
-        # Wait for the child to take over the port before we
-        # release our own socket.
-        for _ in range(20):
-            try:
-                import urllib.request
-
-                with urllib.request.urlopen(f"http://{HOST}:{PORT}/api/me", timeout=1):
-                    pass
-                break
-            except Exception:
-                time.sleep(0.5)
+        # Release the port FIRST so the child's bind-retry loop can win it.
         if _server is not None:
             _server.shutdown()
-        # Normal interpreter shutdown (not os._exit) so the
-        # detached child is not torn down with this process.
-        sys.exit(0)
+        # Then wait for the child to actually bind before we exit.
+        _restart_ready.wait(timeout=20)
+        os._exit(0)
 
     threading.Thread(target=_do_restart, daemon=True).start()
     return jsonify(ok=True, message="restarting")
@@ -677,6 +670,9 @@ def _start_ngrok() -> None:
         _ngrok_proc = subprocess.Popen(
             ["ngrok", "http", str(PORT), "--url", NGROK_DOMAIN],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            # ngrok is a console app: on Windows it spawns a window unless
+            # we hide it. Pure Python, no shell, cross-platform.
+            **_hide_kwargs(),
         )
     except (OSError, ValueError):
         _ngrok_proc = None
@@ -722,6 +718,17 @@ def _tunnel_url() -> str:
 # ---------------------------------------------------------------- runtime
 
 
+def _hide_kwargs() -> dict:
+    """subprocess kwargs that hide a child's console window.
+
+    Windows: DETACHED_PROCESS | CREATE_NO_WINDOW. POSIX: the child is
+    already detached via start_new_session, so nothing extra is needed.
+    """
+    if sys.platform != "win32":
+        return {}
+    return {"creationflags": 0x00000008 | 0x08000000}
+
+
 def _spawn_detached() -> None:
     """Relaunch this script as a windowless, fully detached process.
 
@@ -732,15 +739,22 @@ def _spawn_detached() -> None:
     """
     env = dict(os.environ, SCREENSAVER_DETACHED="1")
     target = str(BASE_DIR / "server.py")
-    devnull = open(os.devnull, "w")
+    # The child owns no console: stdout/stderr go to the log file so we
+    # never have a stray terminal, and every diagnostic is preserved.
+    try:
+        log_fp = open(LOG_FILE, "a", buffering=1)
+    except OSError:
+        log_fp = open(os.devnull, "w")
     if sys.platform == "win32":
         executable = sys.executable.replace("python.exe", "pythonw.exe")
         if not Path(executable).exists():
             executable = sys.executable
         subprocess.Popen(
             [executable, target], env=env,
-            stdout=devnull, stderr=devnull, stdin=devnull,
-            creationflags=0x00000008 | 0x00000200)  # DETACHED_PROCESS | CREATE_NO_WINDOW
+            stdout=log_fp, stderr=log_fp, stdin=open(os.devnull, "r"),
+            # DETACHED_PROCESS | CREATE_NO_WINDOW — the old 0x00000200
+            # was CREATE_NEW_PROCESS_GROUP, which left a console open.
+            creationflags=0x00000008 | 0x08000000)
     else:
         # Intermediate process: spawns the real child, then exits
         # immediately. The grandchild is orphaned to init and is
@@ -749,16 +763,30 @@ def _spawn_detached() -> None:
             [sys.executable, "-c",
              "import subprocess, sys, os\n"
              f"subprocess.Popen([sys.executable, {target!r}], env=os.environ,\n"
-             "                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,\n"
-             "                 stdin=subprocess.DEVNULL, start_new_session=True)\n"],
+             f"                 stdout=open({str(LOG_FILE)!r}, 'a'), stderr=subprocess.STDOUT,\n"
+             "                 stdin=open(os.devnull, 'r'), start_new_session=True)\n"],
             env=env,
-            stdout=devnull, stderr=devnull, stdin=devnull,
+            stdout=log_fp, stderr=log_fp, stdin=open(os.devnull, "r"),
             start_new_session=True)
 
 
 def _detach_self() -> None:
     """Relaunch ourselves as a windowless background process, then exit."""
     _spawn_detached()
+
+
+def _redirect_log() -> None:
+    """Send all stdout/stderr to data/screensaver.log.
+
+    The detached child owns no console, so every print/exception goes to
+    this file. The parent (the console you launched from) is unaffected.
+    """
+    try:
+        _log_fp = open(LOG_FILE, "a", buffering=1)
+    except OSError:
+        return
+    sys.stdout = _log_fp
+    sys.stderr = _log_fp
 
 
 def main() -> None:
@@ -790,6 +818,7 @@ def main() -> None:
         return
 
     # singleton: refuse if another instance is alive, take over a stale pid
+    _redirect_log()
     existing = _pid_alive_in_file()
     if existing is not None and existing != os.getpid():
         print(f"[screensaver] already running (pid {existing})", flush=True)
@@ -807,6 +836,7 @@ def main() -> None:
         try:
             global _server
             _server = make_server(HOST, PORT, app, threaded=True)
+            _restart_ready.set()  # we own the port — the parent may exit now
             break
         except OSError:
             if time.time() > deadline:
