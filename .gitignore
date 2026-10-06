@@ -1,0 +1,80 @@
+# ----------------------
+# Python
+# ----------------------
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Python packaging
+build/
+dist/
+*.egg-info/
+
+# Logs
+*.log
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Type checkers
+.mypy_cache/
+.pyre/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# ----------------------
+# React / Vite / Node
+# ----------------------
+node_modules/
+
+# Vite
+dist/
+.vite/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Cache
+.cache/
+
+# Environment variables
+frontend/.env
+frontend/.env.*
+
+# ----------------------
+# IDEs / OS
+# ----------------------
+.vscode/
+.idea/
+
+.DS_Store
+Thumbs.db
+
+# ----------------------
+# Misc
+# ----------------------
+*.swp
+*.swo
+
+.playwright-mcp
+
+*.pid
+data/**

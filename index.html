@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ScreenSaver</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel-2: #1c2330; --border: #2b3342;
+    --text: #e6e9ef; --muted: #8b94a7; --accent: #5b8cff; --accent-dim: #3a5ea8;
+    --danger: #e5534b; --ok: #3fb27f; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh; display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 22px; border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--panel), var(--bg));
+  }
+  header h1 { font-size: 16px; font-weight: 600; letter-spacing: .2px; }
+  header h1 span { color: var(--accent); }
+  header .who {
+    color: var(--muted); font-size: 12px;
+    display: inline-flex; align-items: center; gap: 10px;
+  }
+  header .who .role {
+    font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 999px;
+    background: rgba(91,140,255,.14); color: var(--accent); border: 1px solid rgba(91,140,255,.3);
+  }
+  header .who .role.guest { background: rgba(63,178,127,.14); color: var(--ok); border-color: rgba(63,178,127,.3); }
+  header button.who-btn {
+    padding: 6px 12px; font-size: 12px; background: transparent; color: var(--muted);
+  }
+  header button.who-btn:hover { color: var(--danger); border-color: var(--danger); }
+  main { flex: 1; width: 100%; max-width: 1060px; margin: 0 auto; padding: 24px 20px 48px; }
+
+  /* login */
+  .login-screen {
+    min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 26px; padding: 32px 20px;
+  }
+  .login-brand { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .login-brand .mark {
+    width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center;
+    background: linear-gradient(150deg, var(--accent), #7c5cff);
+    font-size: 22px; color: #fff; box-shadow: 0 8px 24px -8px var(--accent);
+  }
+  .login-brand h1 { font-size: 21px; font-weight: 650; letter-spacing: .2px; }
+  .login-brand h1 span { color: var(--accent); }
+  .login-brand p { color: var(--muted); font-size: 13px; }
+  .login-card {
+    width: 100%; max-width: 372px; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 16px; padding: 26px;
+    box-shadow: 0 24px 60px -30px rgba(0, 0, 0, .9);
+  }
+  .login-foot { color: var(--muted); font-size: 12px; }
+  .segmented {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 11px;
+    margin-bottom: 22px;
+  }
+  .seg {
+    border: 0; background: transparent; color: var(--muted); font-size: 13px;
+    padding: 8px; border-radius: 8px; cursor: pointer; font-weight: 550;
+  }
+  .seg.active { background: var(--panel-2); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.35); }
+  .login-card label { margin: 0 0 6px; font-size: 12px; }
+  .login-card input { padding: 11px 13px; font-size: 14px; margin-bottom: 16px; }
+  .login-card input:last-of-type { margin-bottom: 20px; }
+  button.block { width: 100%; padding: 11px 16px; font-size: 14px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px;
+  }
+  .card h2 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .card .sub { color: var(--muted); font-size: 12px; margin-bottom: 16px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+  input, select {
+    width: 100%; padding: 9px 11px; border-radius: 8px;
+    background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--text); font-size: 13px; outline: none;
+  }
+  input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(91,140,255,.15); }
+  button {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 9px 16px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--panel-2); color: var(--text); font-size: 13px;
+    cursor: pointer; transition: background .12s, border-color .12s;
+  }
+  button:hover { border-color: var(--accent-dim); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover { background: var(--accent-dim); }
+  button.danger { color: var(--danger); }
+  button.danger:hover { border-color: var(--danger); }
+  button.ghost { padding: 6px 10px; font-size: 12px; }
+  button:disabled { opacity: .45; cursor: default; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .spacer { flex: 1; }
+  .error { color: var(--danger); font-size: 12px; min-height: 16px; margin-top: 10px; }
+
+  /* admin layout */
+  #dashboard { display: flex; flex-direction: column; gap: 24px; }
+  .card .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .card .head h2 { margin: 0; }
+  .thumb { margin-top: 12px; max-width: 100%; border-radius: 8px; border: 1px solid var(--border); display: none; }
+  .new-folder { display: flex; gap: 6px; }
+  .new-folder input { flex: 1; }
+  .otp-code {
+    font: 600 28px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 6px; color: var(--accent); margin: 6px 0 2px;
+  }
+  .otp-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .otp-none { color: var(--muted); font-size: 13px; padding: 14px 0; }
+  .url { word-break: break-all; font-size: 12px; color: var(--accent); margin: 4px 0 12px; }
+
+  /* gallery */
+  .gallery-card { margin: 0; }
+.card { margin: 0; }
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 14px; padding: 4px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 11px; }
+  .tab {
+    padding: 6px 14px; border-radius: 8px; font-size: 12px; cursor: pointer;
+    border: 0; background: transparent; color: var(--muted); font-weight: 500;
+    transition: background .12s, color .12s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--panel-2); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+  /* horizontal strip: hundreds of thumbnails scroll sideways, not vertically */
+  .gallery-scroll {
+    display: flex; gap: 14px; overflow-x: auto; overflow-y: hidden;
+    padding: 6px 4px 18px; scroll-snap-type: x proximity;
+    scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+  }
+  .gallery-scroll::-webkit-scrollbar { height: 10px; }
+  .gallery-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+  .img-tile {
+    position: relative; flex: 0 0 auto; scroll-snap-align: start;
+    width: 230px; height: 144px; border-radius: 10px; overflow: hidden;
+    border: 1px solid var(--border); background: var(--panel-2); cursor: zoom-in;
+    box-shadow: 0 6px 20px -12px rgba(0,0,0,.8);
+  }
+  @media (max-width: 600px) { .img-tile { width: 64vw; height: 40vw; } }
+  .img-tile img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .tile-delete {
+    position: absolute; top: 8px; right: 8px; width: 26px; height: 26px;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    background: rgba(20, 24, 33, .9); border: 1px solid var(--border);
+    color: var(--danger); cursor: pointer; font-size: 15px; line-height: 1;
+    transition: background .12s, border-color .12s, opacity .12s;
+    backdrop-filter: blur(4px); box-shadow: 0 2px 6px -2px rgba(0,0,0,.6);
+  }
+  .tile-delete:hover { background: rgba(229, 83, 75, .22); border-color: var(--danger); }
+  /* always visible on mobile; fade in on desktop hover */
+  @media (hover: none) { .tile-delete { opacity: 1; } }
+  @media (hover: hover) { .tile-delete { opacity: 0; } .img-tile:hover .tile-delete { opacity: 1; } }
+  .empty { color: var(--muted); font-size: 13px; padding: 26px 0; text-align: center; }
+  .toast {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    padding: 10px 18px; border-radius: 999px; font-size: 13px; opacity: 0;
+    transition: transform .25s, opacity .25s; pointer-events: none; z-index: 50;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+  /* lightbox */
+  .lightbox {
+    position: fixed; inset: 0; background: rgba(4, 6, 10, .92);
+    display: none; align-items: center; justify-content: center; z-index: 40; padding: 24px;
+  }
+  .lightbox.show { display: flex; }
+  .lightbox img { max-width: 94vw; max-height: 90vh; border-radius: 8px; border: 1px solid var(--border); }
+  .lightbox .close { position: absolute; top: 18px; right: 22px; }
+</style>
+</head>
+<body>
+<header id="topbar">
+  <h1>Screen<span>Saver</span></h1>
+  <div class="who">
+    <span class="role" id="who-role"></span>
+    <span id="who"></span>
+    <button class="who-btn danger" id="who-logout" hidden>Sign out</button>
+  </div>
+</header>
+<main>
+  <!-- login -->
+  <section id="login">
+    <div class="login-screen">
+      <div class="login-brand">
+        <div class="mark">&#9635;</div>
+        <h1>Screen<span>Saver</span></h1>
+        <p>Private screen capture &amp; gallery</p>
+      </div>
+
+      <div class="login-card">
+        <div class="segmented">
+          <button class="seg active" id="tab-admin">Admin</button>
+          <button class="seg" id="tab-guest">Guest</button>
+        </div>
+
+        <div id="pane-admin">
+          <label for="au">Username</label>
+          <input id="au" autocomplete="username" placeholder="admin">
+          <label for="ap">Password</label>
+          <input id="ap" type="password" autocomplete="current-password" placeholder="Password">
+          <button class="primary block" id="btn-admin">Sign in</button>
+          <div class="error" id="err-admin"></div>
+        </div>
+
+        <div id="pane-guest" hidden>
+          <label for="gu">Your name</label>
+          <input id="gu" maxlength="32" autocomplete="username" placeholder="e.g. alex">
+          <label for="go">Access code</label>
+          <input id="go" maxlength="6" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit code">
+          <button class="primary block" id="btn-guest">Enter gallery</button>
+          <div class="error" id="err-guest"></div>
+        </div>
+      </div>
+
+      <p class="login-foot">Guests need a one-time code from the admin</p>
+    </div>
+  </section>
+
+  <!-- admin + shared gallery -->
+  <section id="app" style="display:none">
+    <div id="dashboard">
+      <div class="card" id="card-capture">
+        <div class="head"><h2>Capture</h2></div>
+        <label for="cap-folder">Folder</label>
+        <div class="row">
+          <select id="cap-folder" style="flex:1"></select>
+          <div class="new-folder">
+            <input id="new-folder-name" type="text" placeholder="Folder 1" maxlength="64">
+            <button class="ghost" id="btn-new-folder">+ New folder</button>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="ghost" id="btn-refresh" style="flex:1">Refresh</button>
+          <button class="primary" id="btn-capture" style="flex:1">Capture screen</button>
+        </div>
+        <div class="error" id="err-capture"></div>
+        <img class="thumb" id="cap-thumb" alt="last capture">
+      </div>
+
+      <div class="card gallery-card">
+        <div class="head"><h2>Gallery</h2><span class="sub" id="gallery-sub"></span></div>
+        <div class="tabs" id="tabs"></div>
+        <div class="gallery-scroll" id="grid"></div>
+        <div class="empty" id="empty" style="display:none">Nothing here yet</div>
+      </div>
+
+      <div class="card" id="card-otp">
+        <div class="head"><h2>One-time passcode</h2></div>
+        <div id="otp-body"></div>
+        <div class="row" style="margin-top:12px">
+          <input id="otp-hours" type="number" min="0.25" max="24" step="0.25" value="3" style="width:70px" title="hours">
+          <button class="primary" id="btn-otp-create">Create</button>
+          <button class="ghost" id="btn-otp-plus" title="extend by 1 hour">+1h</button>
+          <button class="ghost" id="btn-otp-minus" title="shorten by 1 hour">&minus;1h</button>
+          <button class="ghost" id="btn-otp-regen">Regenerate</button>
+        </div>
+        <div class="error" id="err-otp"></div>
+      </div>
+
+      <div class="card" id="card-server">
+        <div class="head"><h2>Server</h2></div>
+        <div class="sub" id="srv-url"></div>
+        <div class="row">
+          <button class="danger" id="btn-stop">Stop server</button>
+          <button id="btn-restart">Restart server</button>
+        </div>
+        <div class="error" id="err-server"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="lightbox" id="lightbox">
+  <button class="close" id="lb-close">Close</button>
+  <img id="lb-img" alt="enlarged">
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+let role = null, currentFolder = "", lastSig = "";
+
+async function api(path, method = "GET", body) {
+  const res = await fetch(path, {
+    method,
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+    credentials: "same-origin",
+  });
+  let data = null;
+  try { data = await res.json(); } catch (e) {}
+  return { ok: res.ok, status: res.status, data: data || {} };
+}
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove("show"), 2400);
+}
+
+async function login(mode) {
+  const isAdmin = mode === "admin";
+  const body = isAdmin
+    ? { mode: "admin", username: $("au").value, password: $("ap").value }
+    : { mode: "guest", username: $("gu").value, otp: $("go").value };
+  const r = await api("/api/login", "POST", body);
+  if (!r.ok) {
+    $(isAdmin ? "err-admin" : "err-guest").textContent = r.data.error || "sign in failed";
+    return;
+  }
+  role = r.data.role;
+  showApp();
+}
+
+async function logout() {
+  await api("/api/logout", "POST");
+  role = null;
+  location.reload();
+}
+
+let _polling = false;
+
+async function showApp() {
+  const me = await api("/api/me");
+  if (!me.ok) {
+    $("app").style.display = "none";
+    $("login").style.display = "block";
+    $("topbar").style.display = "none";
+    document.querySelector("main").style.padding = "0";
+    return;
+  }
+  role = me.data.role;
+  $("login").style.display = "none";
+  $("app").style.display = "block";
+  $("topbar").style.display = "flex";
+  document.querySelector("main").style.padding = "24px 20px 48px";
+  $("who").textContent = me.data.username;
+  $("who-role").textContent = role;
+  $("who-role").className = "role" + (role === "guest" ? " guest" : "");
+  $("who-logout").style.display = "inline-flex";
+  $("dashboard").style.display = "block";
+  const guest = role !== "admin";
+  $("card-capture").style.display = guest ? "none" : "";
+  $("card-otp").style.display = guest ? "none" : "";
+  $("card-server").style.display = guest ? "none" : "";
+  currentFolder = localStorage.getItem("sg-folder") || "";
+  if (role === "admin") {
+    await refreshFolders();
+    refreshOTP();
+    const url = await api("/api/server-url");
+    if (url.ok && url.data.url) $("srv-url").textContent = url.data.url;
+  } else {
+    const fr = await api("/api/folders");
+    allFolders = fr.ok ? (fr.data.folders || []) : [];
+    if (!currentFolder || !allFolders.includes(currentFolder)) {
+      currentFolder = allFolders[0] || "";
+      localStorage.setItem("sg-folder", currentFolder);
+    }
+  }
+  refreshGallery();
+  if (!_polling) {
+    _polling = true;
+    setInterval(refreshGallery, 3000);
+    setInterval(() => { if (role === "admin") tickOTP(); }, 1000);
+  }
+}
+
+/* ---- folders & capture ---- */
+let allFolders = [];
+
+async function refreshFolders() {
+  const r = await api("/api/folders");
+  if (!r.ok) return;
+  allFolders = r.data.folders || [];
+  const sel = $("cap-folder");
+  const keep = currentFolder;
+  sel.innerHTML = "";
+  for (const f of allFolders) {
+    const o = document.createElement("option");
+    o.value = f; o.textContent = f;
+    if (f === keep) o.selected = true;
+    sel.appendChild(o);
+  }
+  if (!sel.value && allFolders.length) sel.value = allFolders[0];
+  currentFolder = sel.value;
+  localStorage.setItem("sg-folder", currentFolder);
+  const nf = $("new-folder-name");
+  if (nf) nf.value = nextFolderName();
+  renderTabs(currentFolder);
+}
+
+async function newFolder() {
+  const input = $("new-folder-name");
+  const name = (input.value || "").trim();
+  if (!name) { $("err-capture").textContent = "enter a folder name"; return; }
+  const r = await api("/api/folders", "POST", { name });
+  if (!r.ok) { $("err-capture").textContent = r.data.error || "failed"; return; }
+  $("err-capture").textContent = "";
+  currentFolder = r.data.folder;
+  localStorage.setItem("sg-folder", currentFolder);
+  input.value = nextFolderName();
+  await refreshFolders();
+  refreshGallery();
+}
+
+async function capture() {
+  const btn = $("btn-capture");
+  btn.disabled = true;
+  $("err-capture").textContent = "";
+  const r = await api("/api/capture", "POST", { folder: currentFolder });
+  btn.disabled = false;
+  if (!r.ok) { $("err-capture").textContent = r.data.error || "capture failed"; return; }
+  $("err-capture").textContent = "";
+  const thumb = $("cap-thumb");
+  thumb.src = "/api/media/" + encodeURIComponent(r.data.folder) + "/" + encodeURIComponent(r.data.saved) + "?t=" + Date.now();
+  thumb.style.display = "block";
+  toast("Captured to " + r.data.folder);
+  refreshGallery();
+}
+
+async function refresh() {
+  $("err-capture").textContent = "";
+  const r = await api("/api/refresh", "POST");
+  if (!r.ok) { $("err-capture").textContent = r.data.error || "refresh failed"; return; }
+  const thumb = $("cap-thumb");
+  thumb.src = "/api/preview?t=" + Date.now();
+  thumb.style.display = "block";
+  toast("Screen refreshed (preview)");
+}
+
+function nextFolderName() {
+  // "Folder N" where N = existing folders + 1
+  let n = 0;
+  for (const f of allFolders) {
+    const m = /^Folder\s*(\d+)$/i.exec(f.trim());
+    if (m) n = Math.max(n, parseInt(m[1], 10) || 0);
+  }
+  return "Folder " + (n + 1);
+}
+
+/* ---- otp ---- */
+function fmtRemaining(sec) {
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60);
+  return `${h}h ${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`;
+}
+
+function renderOTP(otp) {
+  const body = $("otp-body");
+  if (!otp) {
+    body.innerHTML = '<div class="otp-none">No active passcode</div>';
+    return;
+  }
+  body.innerHTML =
+    '<div class="otp-code">' + otp.code + "</div>" +
+    '<div class="otp-count">expires in <span id="otp-left">' + fmtRemaining(otp.remaining_seconds) + "</span></div>";
+}
+
+async function refreshOTP() {
+  const r = await api("/api/otp");
+  if (r.ok) renderOTP(r.data.otp);
+}
+
+function tickOTP() {
+  const el = $("otp-left");
+  if (!el) return;
+  const cur = parseFloat(el.dataset.sec || 0);
+  const sec = cur - 1;
+  el.dataset.sec = sec;
+  el.textContent = fmtRemaining(Math.max(0, sec));
+  if (sec <= 0) refreshOTP();
+}
+// seed the ticker whenever we render
+const _renderOTP = renderOTP;
+renderOTP = function (otp) {
+  _renderOTP(otp);
+  const el = $("otp-left");
+  if (el && otp) el.dataset.sec = otp.remaining_seconds;
+};
+
+async function otpAction(path, body) {
+  $("err-otp").textContent = "";
+  const r = await api(path, "POST", body);
+  if (!r.ok) { $("err-otp").textContent = r.data.error || "failed"; return; }
+  refreshOTP();
+}
+
+/* ---- gallery ---- */
+async function refreshGallery() {
+  const folder = currentFolder;
+  const r = await api("/api/gallery" + (folder ? "?folder=" + encodeURIComponent(folder) : ""));
+  if (!r.ok) return;
+  const items = r.data.items || [];
+  const sig = folder + "|" + JSON.stringify(items);
+  if (sig !== lastSig) {
+    if (lastSig !== "") toast("Gallery updated");
+    lastSig = sig;
+    renderGallery(items, folder);
+  }
+  renderTabs(folder);
+}
+
+let _tabSig = "";
+
+function renderTabs(active) {
+  const sig = allFolders.join("\u0000") + "|" + active;
+  if (sig === _tabSig) return;   // nothing changed — don't touch the DOM
+  _tabSig = sig;
+  const tabs = $("tabs");
+  tabs.innerHTML = "";
+  if (!allFolders.length) return;
+  for (const f of allFolders) {
+    const b = document.createElement("button");
+    b.className = "tab" + (f === active ? " active" : "");
+    b.textContent = f;
+    b.onclick = () => {
+      currentFolder = f;
+      localStorage.setItem("sg-folder", f);
+      if (role === "admin" && $("cap-folder")) $("cap-folder").value = f;
+      lastSig = "";
+      refreshGallery();
+    };
+    tabs.appendChild(b);
+  }
+}
+
+function renderGallery(items, folder) {
+  const grid = $("grid");
+  const empty = $("empty");
+  grid.innerHTML = "";
+  const imgs = items.filter(i => i.type === "image");
+  empty.style.display = imgs.length ? "none" : "block";
+  empty.textContent = folder ? "No screenshots in this folder yet" : "No folders yet";
+  const sub = $("gallery-sub");
+  if (sub) sub.textContent = folder ? `${imgs.length} screenshot${imgs.length === 1 ? "" : "s"}` : "";
+  const canDelete = role === "admin";
+  for (const item of imgs) {
+    const tile = document.createElement("div");
+    tile.className = "img-tile";
+    tile.dataset.name = item.name;
+    tile.dataset.folder = folder || "";
+    const img = document.createElement("img");
+    const base = folder ? encodeURIComponent(folder) + "/" : "";
+    img.src = "/api/media/" + base + encodeURIComponent(item.name);
+    img.alt = item.name;
+    img.loading = "lazy";
+    img.onclick = () => { $("lb-img").src = img.src; $("lightbox").classList.add("show"); };
+    tile.appendChild(img);
+    if (canDelete) {
+      const del = document.createElement("button");
+      del.className = "tile-delete";
+      del.title = "Delete " + item.name;
+      del.innerHTML = "✕";
+      del.onclick = e => { e.stopPropagation(); deleteImage(tile, item.name, folder); };
+      tile.appendChild(del);
+    }
+    grid.appendChild(tile);
+  }
+}
+
+async function deleteImage(tile, name, folder) {
+  if (role !== "admin") return;
+  const path = (folder ? encodeURIComponent(folder) + "/" : "") + encodeURIComponent(name);
+  const r = await api("/api/media/" + path, "DELETE");
+  if (!r.ok) { toast(r.data.error || "delete failed"); return; }
+  tile.remove();
+  toast("deleted " + name);
+  const sub = $("gallery-sub");
+  if (sub) {
+    const left = $("grid").children.length;
+    sub.textContent = left + " screenshot" + (left === 1 ? "" : "s");
+  }
+  if ($("grid").children.length === 0) {
+    $("empty").style.display = "block";
+    $("empty").textContent = folder ? "No screenshots in this folder yet" : "No folders yet";
+  }
+}
+
+/* ---- wire up ---- */
+$("btn-admin").onclick = () => login("admin");
+$("btn-guest").onclick = () => login("guest");
+$("who-logout").onclick = logout;
+$("btn-capture").onclick = capture;
+$("btn-refresh").onclick = refresh;
+$("btn-new-folder").onclick = newFolder;
+$("cap-folder").onchange = e => { currentFolder = e.target.value; localStorage.setItem("sg-folder", currentFolder); lastSig = ""; refreshGallery(); };
+$("btn-otp-create").onclick = () => otpAction("/api/otp", { hours: parseFloat($("otp-hours").value) || 3 });
+$("btn-otp-plus").onclick = () => otpAction("/api/otp/adjust", { delta_hours: 1 });
+$("btn-otp-minus").onclick = () => otpAction("/api/otp/adjust", { delta_hours: -1 });
+$("btn-otp-regen").onclick = () => otpAction("/api/otp/regenerate", {});
+$("btn-stop").onclick = async () => {
+  if (!confirm("Stop the server? It will shut down completely.")) return;
+  $("err-server").textContent = "";
+  const r = await api("/api/stop", "POST");
+  if (!r.ok) $("err-server").textContent = r.data.error || "failed";
+  else $("err-server").textContent = "stopping…";
+};
+$("btn-restart").onclick = async () => {
+  if (!confirm("Restart the server?")) return;
+  $("err-server").textContent = "";
+  const r = await api("/api/restart", "POST");
+  if (!r.ok) $("err-server").textContent = r.data.error || "failed";
+  else $("err-server").textContent = "restarting…";
+};
+$("lb-close").onclick = () => $("lightbox").classList.remove("show");
+$("lightbox").onclick = e => { if (e.target.id === "lightbox") $("lightbox").classList.remove("show"); };
+document.addEventListener("keydown", e => { if (e.key === "Escape") $("lightbox").classList.remove("show"); });
+
+$("au").addEventListener("keydown", e => { if (e.key === "Enter") login("admin"); });
+$("ap").addEventListener("keydown", e => { if (e.key === "Enter") login("admin"); });
+$("gu").addEventListener("keydown", e => { if (e.key === "Enter") login("guest"); });
+$("go").addEventListener("keydown", e => { if (e.key === "Enter") login("guest"); });
+$("new-folder-name").addEventListener("keydown", e => { if (e.key === "Enter") newFolder(); });
+
+$("tab-admin").onclick = () => {
+  $("tab-admin").classList.add("active"); $("tab-guest").classList.remove("active");
+  $("pane-admin").style.display = "block"; $("pane-guest").style.display = "none";
+};
+$("tab-guest").onclick = () => {
+  $("tab-guest").classList.add("active"); $("tab-admin").classList.remove("active");
+  $("pane-guest").style.display = "block"; $("pane-admin").style.display = "none";
+};
+
+showApp();
+</script>
+</body>
+</html>
