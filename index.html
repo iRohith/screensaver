@@ -140,12 +140,26 @@
   .gallery-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
   .img-tile {
     position: relative; flex: 0 0 auto; scroll-snap-align: start;
-    width: 230px; height: 144px; border-radius: 10px; overflow: hidden;
+    width: 230px; border-radius: 10px; overflow: hidden;
     border: 1px solid var(--border); background: var(--panel-2); cursor: zoom-in;
     box-shadow: 0 6px 20px -12px rgba(0,0,0,.8);
+    display: flex; flex-direction: column;
   }
-  @media (max-width: 600px) { .img-tile { width: 64vw; height: 40vw; } }
+  @media (max-width: 600px) { .img-tile { width: 64vw; } }
+  .img-tile .tile-img { position: relative; flex: 1; min-height: 100px; }
   .img-tile img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .tile-cap { font-size: 11px; color: var(--muted); padding: 5px 8px 7px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--panel-2); }
+  .tile-cap b { color: var(--text); font-weight: 600; }
+  .tile-dl {
+    position: absolute; top: 8px; left: 8px; width: 26px; height: 26px;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    background: rgba(20, 24, 33, .9); border: 1px solid var(--border);
+    color: var(--accent); cursor: pointer; font-size: 13px; line-height: 1;
+    transition: background .12s, border-color .12s, opacity .12s;
+    backdrop-filter: blur(4px); box-shadow: 0 2px 6px -2px rgba(0,0,0,.6);
+  }
+  .tile-dl:hover { background: rgba(91,140,255,.22); border-color: var(--accent); }
   .tile-delete {
     position: absolute; top: 8px; right: 8px; width: 26px; height: 26px;
     border-radius: 50%; display: flex; align-items: center; justify-content: center;
@@ -156,8 +170,8 @@
   }
   .tile-delete:hover { background: rgba(229, 83, 75, .22); border-color: var(--danger); }
   /* always visible on mobile; fade in on desktop hover */
-  @media (hover: none) { .tile-delete { opacity: 1; } }
-  @media (hover: hover) { .tile-delete { opacity: 0; } .img-tile:hover .tile-delete { opacity: 1; } }
+  @media (hover: none) { .tile-dl, .tile-delete { opacity: 1; } }
+  @media (hover: hover) { .tile-dl, .tile-delete { opacity: 0; } .img-tile:hover .tile-dl, .img-tile:hover .tile-delete { opacity: 1; } }
   .empty { color: var(--muted); font-size: 13px; padding: 26px 0; text-align: center; }
   .toast {
     position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(80px);
@@ -247,7 +261,10 @@
       </div>
 
       <div class="card gallery-card">
-        <div class="head"><h2>Gallery</h2><span class="sub" id="gallery-sub"></span></div>
+        <div class="head"><h2>Gallery</h2>
+          <span class="sub" id="gallery-sub"></span>
+          <button class="ghost" id="btn-download-all" title="Download this folder as a zip" style="margin-left:auto">Download all</button>
+        </div>
         <div class="tabs" id="tabs"></div>
         <div class="gallery-scroll" id="grid"></div>
         <div class="empty" id="empty" style="display:none">Nothing here yet</div>
@@ -300,6 +317,13 @@ async function api(path, method = "GET", body) {
   let data = null;
   try { data = await res.json(); } catch (e) {}
   return { ok: res.ok, status: res.status, data: data || {} };
+}
+
+// Like api() but returns the raw Response so binary payloads (zips, images)
+// can be streamed into a download without being parsed as JSON.
+async function fetchRaw(path) {
+  const res = await fetch(path, { credentials: "same-origin" });
+  return res;
 }
 
 function toast(msg) {
@@ -557,28 +581,82 @@ function renderGallery(items, folder) {
   const sub = $("gallery-sub");
   if (sub) sub.textContent = folder ? `${imgs.length} screenshot${imgs.length === 1 ? "" : "s"}` : "";
   const canDelete = role === "admin";
-  for (const item of imgs) {
+  const dlBtn = $("btn-download-all");
+  if (dlBtn) dlBtn.disabled = !folder;
+  for (let i = 0; i < imgs.length; i++) {
+    const item = imgs[i];
     const tile = document.createElement("div");
     tile.className = "img-tile";
     tile.dataset.name = item.name;
     tile.dataset.folder = folder || "";
+    const wrap = document.createElement("div");
+    wrap.className = "tile-img";
     const img = document.createElement("img");
     const base = folder ? encodeURIComponent(folder) + "/" : "";
     img.src = "/api/media/" + base + encodeURIComponent(item.name);
     img.alt = item.name;
     img.loading = "lazy";
     img.onclick = () => { $("lb-img").src = img.src; $("lightbox").classList.add("show"); };
-    tile.appendChild(img);
+    wrap.appendChild(img);
+    const dl = document.createElement("button");
+    dl.className = "tile-dl";
+    dl.title = "Download " + item.name;
+    dl.innerHTML = "↓";
+    dl.onclick = e => { e.stopPropagation(); downloadOne(folder, item.name); };
+    wrap.appendChild(dl);
     if (canDelete) {
       const del = document.createElement("button");
       del.className = "tile-delete";
       del.title = "Delete " + item.name;
       del.innerHTML = "✕";
       del.onclick = e => { e.stopPropagation(); deleteImage(tile, item.name, folder); };
-      tile.appendChild(del);
+      wrap.appendChild(del);
     }
+    tile.appendChild(wrap);
+    const cap = document.createElement("div");
+    cap.className = "tile-cap";
+    cap.innerHTML = "<b>" + (i + 1) + "</b> " + escapeHtml(item.name);
+    tile.appendChild(cap);
     grid.appendChild(tile);
   }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+async function downloadOne(folder, name) {
+  const path = (folder ? encodeURIComponent(folder) + "/" : "") + encodeURIComponent(name);
+  const res = await fetchRaw("/api/media/" + path);
+  if (!res.ok) { toast("download failed"); return; }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  toast("downloaded " + name);
+}
+
+async function downloadAll() {
+  const folder = currentFolder;
+  if (!folder) { toast("select a folder first"); return; }
+  const btn = $("btn-download-all");
+  btn.disabled = true;
+  const res = await fetchRaw("/api/download/" + encodeURIComponent(folder));
+  btn.disabled = false;
+  if (!res.ok) {
+    let msg = "download failed";
+    try { msg = (await res.json()).error || msg; } catch (e) {}
+    toast(msg); return;
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = folder + ".zip";
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  toast("downloaded " + folder);
 }
 
 async function deleteImage(tile, name, folder) {
@@ -611,6 +689,7 @@ $("btn-otp-create").onclick = () => otpAction("/api/otp", { hours: parseFloat($(
 $("btn-otp-plus").onclick = () => otpAction("/api/otp/adjust", { delta_hours: 1 });
 $("btn-otp-minus").onclick = () => otpAction("/api/otp/adjust", { delta_hours: -1 });
 $("btn-otp-regen").onclick = () => otpAction("/api/otp/regenerate", {});
+$("btn-download-all").onclick = downloadAll;
 $("btn-stop").onclick = async () => {
   if (!confirm("Stop the server? It will shut down completely.")) return;
   $("err-server").textContent = "";

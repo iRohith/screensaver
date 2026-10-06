@@ -447,6 +447,50 @@ def preview():
     return resp
 
 
+@app.get("/api/download/<path:subpath>")
+def download(subpath: str):
+    """Download every image in a folder as a single zip.
+
+    Only "<folder>" is accepted (no nested paths). The zip is built in
+    memory and streamed, so it never touches disk and cannot leak the
+    hidden refresh previews or the persisted OTP.
+    """
+    import io
+    import zipfile
+
+    err = _require_auth()
+    if err:
+        return err
+    parts = [seg for seg in subpath.split("/") if seg]
+    if len(parts) != 1:
+        return jsonify(error="not found"), 404
+    folder = parts[0]
+    base = _folder_path(folder)
+    if base is None or not base.is_dir():
+        return jsonify(error="folder not found"), 404
+    try:
+        files = sorted(
+            p for p in base.iterdir()
+            if p.is_file() and p.suffix.lower() in ALLOWED_EXTENSIONS
+        )
+    except OSError as exc:
+        return jsonify(error=str(exc)), 500
+    if not files:
+        return jsonify(error="folder is empty"), 404
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for p in files:
+            zf.write(p, arcname=p.name)
+    buf.seek(0)
+    resp = Response(buf.getvalue(), mimetype="application/zip")
+    resp.headers["Content-Disposition"] = (
+        f'attachment; filename="{folder}.zip"'
+    )
+    resp.headers["Cache-Control"] = "no-store, max-age=0"
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    return resp
+
+
 @app.get("/api/media/<path:subpath>")
 def media(subpath: str):
     err = _require_auth()
