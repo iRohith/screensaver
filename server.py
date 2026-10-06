@@ -66,7 +66,6 @@ _ngrok_proc = None             # subprocess.Popen of ngrok
 _capture_lock = threading.Lock()
 _shutdown = threading.Event()
 _restarting = threading.Event()
-_restart_ready = threading.Event()  # set by the child once it owns the port
 _otp = None                    # {"code": str, "expires_at": float, "hours": float}
 _state_lock = threading.Lock()
 _fail_attempts: dict[str, list[float]] = {}
@@ -75,6 +74,21 @@ HTML_PATH = BASE_DIR / "index.html"
 OTP_FILE = DATA_DIR / ".otp.json"  # persisted so an OTP survives server restart
 
 # ---------------------------------------------------------------- helpers
+
+
+def _port_bound() -> bool:
+    """True if something is currently listening on HOST:PORT."""
+    import socket
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(0.4)
+    try:
+        s.bind((HOST, PORT))
+        return False  # free — the child has not taken it yet
+    except OSError:
+        return True  # in use — the child is up
+    finally:
+        s.close()
 
 
 def _is_live_pid(pid: int) -> bool:
@@ -645,13 +659,14 @@ def restart_server():
         # startup check passes; the child's bind-retry absorbs the port race.
         _remove_pid()
         _restarting.set()
-        _restart_ready.clear()
         _spawn_detached()
-        # Release the port FIRST so the child's bind-retry loop can win it.
-        if _server is not None:
-            _server.shutdown()
-        # Then wait for the child to actually bind before we exit.
-        _restart_ready.wait(timeout=20)
+        # Wait until the child has actually bound the port (polling beats
+        # an event, since os._exit below tears this process down before
+        # any signal handler runs), then exit hard.
+        for _ in range(40):
+            if _port_bound():
+                break
+            time.sleep(0.5)
         os._exit(0)
 
     threading.Thread(target=_do_restart, daemon=True).start()
@@ -836,7 +851,6 @@ def main() -> None:
         try:
             global _server
             _server = make_server(HOST, PORT, app, threaded=True)
-            _restart_ready.set()  # we own the port — the parent may exit now
             break
         except OSError:
             if time.time() > deadline:
